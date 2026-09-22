@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import io
+import json
 import re
 import sys
 from dataclasses import dataclass
@@ -40,7 +41,15 @@ class Application:
 @dataclass(frozen=True)
 class Product:
     article: str
+    detail_url: str
     image_url: str
+    category: str
+    part: str
+    oe: str
+    makes: tuple[str, ...]
+    description: str
+    brake_system: str
+    fitting_position: str
     applications: tuple[Application, ...]
 
 
@@ -72,14 +81,18 @@ def parse_product(article: str) -> Product:
     if image is None:
         raise RuntimeError(f"Для артикула {article} не найдено изображение")
 
-    makes: list[str] = []
-    for strong in soup.find_all("strong"):
-        if strong.get_text(" ", strip=True).upper().startswith("MAKE"):
-            cell = strong.find_parent("td")
-            value_cell = cell.find_next_sibling("td") if cell else None
-            if value_cell:
-                makes = [" ".join(value.split()) for value in value_cell.stripped_strings]
-            break
+    def table_value(label: str) -> tuple[str, ...]:
+        expected = label.rstrip(":").strip().casefold()
+        for marker in soup.find_all(["strong", "span"]):
+            actual = marker.get_text(" ", strip=True).rstrip(":").strip().casefold()
+            if actual == expected:
+                cell = marker.find_parent("td")
+                value_cell = cell.find_next_sibling("td") if cell else None
+                if value_cell:
+                    return tuple(" ".join(value.split()) for value in value_cell.stripped_strings)
+        return ()
+
+    makes = list(table_value("Make"))
 
     applications: list[Application] = []
     accordion = soup.select_one(".accordion")
@@ -101,7 +114,53 @@ def parse_product(article: str) -> Product:
             )
             applications.append(Application(make, summary, details))
 
-    return Product(article, urljoin(BASE_URL, image["src"]), tuple(applications))
+    category_node = soup.select_one("#oenumber")
+    category = " ".join(category_node.get_text(" ", strip=True).split()) if category_node else ""
+    return Product(
+        article=article,
+        detail_url=detail_url,
+        image_url=urljoin(BASE_URL, image["src"]),
+        category=category,
+        part=" ".join(table_value("Part")),
+        oe=" ".join(table_value("OE")),
+        makes=tuple(makes),
+        description=" ".join(table_value("Description")),
+        brake_system=" ".join(table_value("BRAKE SYSTEM")),
+        fitting_position=" ".join(table_value("FITTING POSITION")),
+        applications=tuple(applications),
+    )
+
+
+def product_to_dict(product: Product, name: str) -> dict:
+    """Return all catalogue data in a stable, serializable schema."""
+    return {
+        "schema_version": 1,
+        "article": product.article,
+        "name": name,
+        "source": {
+            "catalog": "WDPYD",
+            "product_url": product.detail_url,
+            "image_url": product.image_url,
+        },
+        "catalog": {
+            "category": product.category,
+            "part": product.part,
+            "oe": product.oe,
+            "makes": list(product.makes),
+            "description": product.description,
+            "brake_system": product.brake_system,
+            "fitting_position": product.fitting_position,
+        },
+        "applications": [
+            {
+                "make": application.make,
+                "model": application.model,
+                "summary": application.summary,
+                "details": list(application.details),
+            }
+            for application in product.applications
+        ],
+    }
 
 
 def normalize_article(value: object) -> str:
@@ -388,6 +447,11 @@ def build_with_name(article: str, name: str, template: Path | None, output_dir: 
     output_dir.mkdir(parents=True, exist_ok=True)
     destination = output_dir / f"{output_stem or article}.jpg"
     render_card(product, name, image_bytes, template).save(destination, "JPEG", quality=95, subsampling=0)
+    json_destination = output_dir / f"{output_stem or article}.json"
+    json_destination.write_text(
+        json.dumps(product_to_dict(product, name), ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
     return destination
 
 

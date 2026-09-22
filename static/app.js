@@ -43,7 +43,7 @@ async function upload(file) {
 
 function statusCell(row) {
   if (row.status === 'processing') return '<span class="status active"><i></i>Обработка</span>';
-  if (row.status === 'done') return `<a class="status done" href="${row.file_url}"><i>✓</i>Готово</a>`;
+  if (row.status === 'done') return `<span class="status done"><i>✓</i>Готово · <a href="${row.file_url}">JPG</a> · <a href="${row.json_url}">JSON</a></span>`;
   if (row.status === 'error') return `<span class="status failed" title="${escapeHtml(row.error || '')}"><i>!</i>Ошибка</span>`;
   return '<span class="status waiting"><i></i>В очереди</span>';
 }

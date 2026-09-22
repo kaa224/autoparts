@@ -45,6 +45,7 @@ class Row:
     status: str = "waiting"
     error: str | None = None
     filename: str | None = None
+    json_filename: str | None = None
 
     def json(self, job_id: str) -> dict[str, str | None]:
         return {
@@ -54,6 +55,8 @@ class Row:
             "error": self.error,
             "file_url": url_for("job_file", job_id=job_id, filename=self.filename)
             if self.filename else None,
+            "json_url": url_for("job_file", job_id=job_id, filename=self.json_filename)
+            if self.json_filename else None,
         }
 
 
@@ -177,6 +180,7 @@ def process_job(job_id: str) -> None:
                 result.replace(expected)
             with jobs_lock:
                 row.filename = expected.name
+                row.json_filename = f"{file_article}.json"
                 row.status = "done"
         except Exception as exc:  # one failed article must not stop the batch
             with jobs_lock:
@@ -230,7 +234,9 @@ def job_status(job_id: str):
 @app.get("/jobs/<job_id>/files")
 def job_files(job_id: str):
     job = get_job(job_id)
-    files = sorted(job.output_dir.glob("*.jpg")) if job.output_dir.exists() else []
+    files = sorted(
+        path for path in job.output_dir.iterdir() if path.suffix.lower() in {".jpg", ".json"}
+    ) if job.output_dir.exists() else []
     return render_template("files.html", job=job, files=files)
 
 
@@ -246,8 +252,9 @@ def download_job(job_id: str):
     job.output_dir.mkdir(parents=True, exist_ok=True)
     archive = job.output_dir.parent / f"cards-{job_id}.zip"
     with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as bundle:
-        for image in sorted(job.output_dir.glob("*.jpg")):
-            bundle.write(image, image.name)
+        for artifact in sorted(job.output_dir.iterdir()):
+            if artifact.suffix.lower() in {".jpg", ".json"}:
+                bundle.write(artifact, artifact.name)
     return send_file(archive, as_attachment=True, download_name=archive.name)
 
 

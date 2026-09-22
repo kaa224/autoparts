@@ -7,7 +7,7 @@
 </head>
 <body><main class="shell"><header><span class="eyebrow">ГОТОВЫЕ ФАЙЛЫ</span><h1>Карточки товаров</h1>
   <p>{{ job.output_dir }}</p></header><section class="panel file-grid">
-  {% for file in files %}<a href="{{ url_for('job_file', job_id=job.id, filename=file.name) }}"><span>JPG</span>{{ file.name }}</a>
+  {% for file in files %}<a href="{{ url_for('job_file', job_id=job.id, filename=file.name) }}"><span>{{ file.suffix[1:]|upper }}</span>{{ file.name }}</a>
   {% else %}<p>Готовых файлов пока нет.</p>{% endfor %}
   </section></main></body>
 </html>
