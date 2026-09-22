@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import base64
+import hmac
 import os
 import re
 import threading
@@ -79,6 +81,41 @@ class Job:
 
 
 jobs: dict[str, Job] = {}
+
+
+def unauthorized_response():
+    return (
+        "Требуется авторизация\n",
+        401,
+        {"WWW-Authenticate": 'Basic realm="Генератор карточек Ozon", charset="UTF-8"'},
+    )
+
+
+@app.before_request
+def require_separate_auth():
+    """Protect this application with credentials independent of rialsat-admin."""
+    if os.environ.get("AUTOPARTS_REQUIRE_AUTH", "0") != "1":
+        return None
+    expected_login = os.environ.get("AUTOPARTS_LOGIN", "")
+    expected_password = os.environ.get("AUTOPARTS_PASSWORD", "")
+    if not expected_login or not expected_password:
+        return "Авторизация приложения не настроена\n", 503
+    header = request.headers.get("Authorization", "")
+    scheme, _, token = header.partition(" ")
+    if scheme.casefold() != "basic" or not token:
+        return unauthorized_response()
+    try:
+        decoded = base64.b64decode(token, validate=True).decode("utf-8")
+    except (ValueError, UnicodeDecodeError):
+        return unauthorized_response()
+    login, separator, password = decoded.partition(":")
+    if not separator:
+        return unauthorized_response()
+    login_ok = hmac.compare_digest(login, expected_login)
+    password_ok = hmac.compare_digest(password, expected_password)
+    if not (login_ok and password_ok):
+        return unauthorized_response()
+    return None
 
 
 def normalized_header(value: object) -> str:

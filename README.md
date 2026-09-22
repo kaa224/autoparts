@@ -46,6 +46,8 @@ python3 app.py
 - `AUTOPARTS_DATA_DIR` — каталог хранения результатов;
 - `AUTOPARTS_WORKERS` — число одновременно обрабатываемых пакетов;
 - `PORT` — порт веб-сервера, по умолчанию `8000`.
+- `AUTOPARTS_REQUIRE_AUTH=1` — включает отдельную HTTP Basic Auth;
+- `AUTOPARTS_LOGIN` и `AUTOPARTS_PASSWORD` — отдельные учётные данные приложения.
 
 Production-запуск за nginx выполняется одним процессом Gunicorn (состояние
 задач хранится в памяти процесса):

@@ -1,10 +1,15 @@
 import io
+import os
 import unittest
 
 from app import app, parse_table
 
 
 class SpreadsheetValidationTest(unittest.TestCase):
+    def tearDown(self):
+        for key in ("AUTOPARTS_REQUIRE_AUTH", "AUTOPARTS_LOGIN", "AUTOPARTS_PASSWORD"):
+            os.environ.pop(key, None)
+
     def test_columns_are_case_and_space_insensitive(self):
         rows = parse_table([
             [" Артикул ", "НАИМЕНОВАНИЕ"],
@@ -25,6 +30,17 @@ class SpreadsheetValidationTest(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 400)
         self.assertIn(".xls", response.get_json()["error"])
+
+    def test_separate_basic_auth(self):
+        os.environ.update(
+            AUTOPARTS_REQUIRE_AUTH="1",
+            AUTOPARTS_LOGIN="parts-user",
+            AUTOPARTS_PASSWORD="different-secret",
+        )
+        client = app.test_client()
+        self.assertEqual(client.get("/").status_code, 401)
+        token = __import__("base64").b64encode(b"parts-user:different-secret").decode()
+        self.assertEqual(client.get("/", headers={"Authorization": f"Basic {token}"}).status_code, 200)
 
 
 if __name__ == "__main__":
