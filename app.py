@@ -87,7 +87,7 @@ def unauthorized_response():
     return (
         "Требуется авторизация\n",
         401,
-        {"WWW-Authenticate": 'Basic realm="Генератор карточек Ozon", charset="UTF-8"'},
+        {"WWW-Authenticate": 'Basic realm="Ozon card generator", charset="UTF-8"'},
     )
 
 
