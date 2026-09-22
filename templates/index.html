@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Генерация карточек для ОЗОН</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <span class="eyebrow">WDPYD · OZON</span>
+      <h1>Генерация карточек для ОЗОН.<br>Элементы ходовой части автомобилей</h1>
+      <p>Загрузите Excel-файл с колонками «артикул» и «наименование».</p>
+    </header>
+
+    <section class="panel upload-panel">
+      <input id="file" type="file" accept=".xls,.xlsx" hidden>
+      <button id="choose" class="primary" type="button">
+        <span class="upload-icon">↑</span>
+        Загрузить файл артикулов и наименований
+      </button>
+      <div id="selection" class="selection">Файл не выбран</div>
+      <div id="error" class="error" role="alert" hidden></div>
+    </section>
+
+    <section id="work" class="panel work-panel" hidden>
+      <div class="work-head">
+        <div>
+          <span class="label">Обработка</span>
+          <strong id="counter">0 из 0</strong>
+        </div>
+        <div class="progress-track"><div id="total-progress"></div></div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Артикул</th><th>Наименование</th><th>Прогресс</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+      <div id="result" class="result" hidden>
+        <div><span class="check">✓</span><div><strong>Обработка завершена</strong><small id="local-path"></small></div></div>
+        <nav>
+          <a id="folder-link" class="secondary" target="_blank">Открыть папку</a>
+          <a id="download-link" class="primary">Скачать ZIP</a>
+        </nav>
+      </div>
+    </section>
+  </main>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

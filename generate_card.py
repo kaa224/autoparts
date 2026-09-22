@@ -303,9 +303,16 @@ def render_card(product: Product, name: str, image_bytes: bytes, template_path: 
 def build(article: str, price: Path, template: Path | None, output_dir: Path) -> Path:
     product = parse_product(article)
     name = lookup_name(price, article)
+    return build_with_name(article, name, template, output_dir, product)
+
+
+def build_with_name(article: str, name: str, template: Path | None, output_dir: Path,
+                    product: Product | None = None, output_stem: str | None = None) -> Path:
+    """Build a card when the name has already been read from an uploaded file."""
+    product = product or parse_product(article)
     image_bytes = fetch(product.image_url)
     output_dir.mkdir(parents=True, exist_ok=True)
-    destination = output_dir / f"{article}.jpg"
+    destination = output_dir / f"{output_stem or article}.jpg"
     render_card(product, name, image_bytes, template).save(destination, "JPEG", quality=95, subsampling=0)
     return destination
 
