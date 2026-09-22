@@ -190,6 +190,45 @@ def contain(image: Image.Image, size: tuple[int, int]) -> Image.Image:
     return image
 
 
+def extract_wheel(template: Image.Image) -> tuple[Image.Image, Image.Image]:
+    """Return the wheel crop and an alpha mask without its white/green backdrop.
+
+    The tyre touches the right edge of the reference.  For every scanline we
+    detect its low-saturation grey/black pixels, discard unrelated elements
+    that are not connected to the right-hand cluster, then retain the complete
+    profile from that boundary to the canvas edge.
+    """
+    box = (620, 640, 750, 1000)
+    wheel = template.crop(box).convert("RGB")
+    hsv = wheel.convert("HSV")
+    mask = Image.new("L", wheel.size, 0)
+    mask_pixels = mask.load()
+    hsv_pixels = hsv.load()
+
+    for y in range(wheel.height):
+        candidates = [
+            x for x in range(wheel.width)
+            if hsv_pixels[x, y][1] < 105 and hsv_pixels[x, y][2] < 225
+        ]
+        if not candidates or candidates[-1] < wheel.width - 8:
+            continue
+
+        # Work backwards from the rightmost tyre pixel. A sizeable gap marks
+        # the end of the tyre and excludes unrelated objects to its left.
+        cluster = [candidates[-1]]
+        for x in reversed(candidates[:-1]):
+            if cluster[-1] - x > 24:
+                break
+            cluster.append(x)
+        boundary = max(0, min(cluster) - 2)
+        for x in range(boundary, wheel.width):
+            mask_pixels[x, y] = 255
+
+    # A tiny blur preserves the antialiased outer edge without reintroducing
+    # a visible rectangle of the original background.
+    return wheel, mask.filter(ImageFilter.GaussianBlur(0.7))
+
+
 def render_card(product: Product, name: str, image_bytes: bytes, template_path: Path | None) -> Image.Image:
     card = Image.new("RGB", CARD_SIZE, "white")
     draw = ImageDraw.Draw(card)
@@ -256,13 +295,8 @@ def render_card(product: Product, name: str, image_bytes: bytes, template_path: 
     # retained pixel-for-pixel from the supplied template and remains on top
     # of the bottom band, matching the reference composition.
     if template is not None and template.size == CARD_SIZE:
-        wheel_box = (650, 650, 750, 1000)
-        wheel = template.crop(wheel_box).convert("RGB")
-        card.paste(wheel, wheel_box[:2])
-        # The reference product reaches this crop at its upper-left edge;
-        # clear that tiny unrelated remnant while keeping the tyre untouched.
-        draw = ImageDraw.Draw(card)
-        draw.rectangle((650, 650, 674, 684), fill="white")
+        wheel, wheel_mask = extract_wheel(template)
+        card.paste(wheel, (620, 640), wheel_mask)
     return card
 
 
