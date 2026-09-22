@@ -128,7 +128,8 @@ def applicability_labels(applications: tuple[Application, ...]) -> list[str]:
     if len(makes) >= 6:
         return makes
     if len(makes) >= 3:
-        return unique([f"{app.make} {app.model}".strip() for app in applications])
+        make_models = unique([f"{app.make} {app.model}".strip() for app in applications])
+        return makes if len(make_models) >= 6 else make_models
     labels: list[str] = []
     for app in applications:
         labels.extend(app.details or (app.summary,))
@@ -182,6 +183,68 @@ def split_balanced(labels: list[str]) -> tuple[str, str]:
         if delta < best_delta:
             best, best_delta = (top, bottom), delta
     return best
+
+
+def split_balanced_items(labels: list[str]) -> tuple[list[str], list[str]]:
+    """Split complete labels into two groups with similar character lengths."""
+    if len(labels) < 2:
+        return labels, []
+    best_index = 1
+    best_delta = float("inf")
+    for index in range(1, len(labels)):
+        left = " • ".join(labels[:index])
+        right = " • ".join(labels[index:])
+        delta = abs(len(left) - len(right))
+        if delta < best_delta:
+            best_index, best_delta = index, delta
+    return labels[:best_index], labels[best_index:]
+
+
+def band_lines(labels: list[str], character_limit: int = 50) -> list[str]:
+    """Use two lines when a band's content exceeds the requested limit."""
+    text = " • ".join(labels)
+    if len(text) <= character_limit:
+        return [text] if text else []
+    left, right = split_balanced_items(labels)
+    if right:
+        return [" • ".join(left), " • ".join(right)]
+    # A single unusually long label still needs to remain fully visible.
+    words = text.split()
+    if len(words) < 2:
+        midpoint = len(text) // 2
+        return [text[:midpoint], text[midpoint:]]
+    split_at = min(range(1, len(words)), key=lambda i: abs(len(" ".join(words[:i])) - len(" ".join(words[i:]))))
+    return [" ".join(words[:split_at]), " ".join(words[split_at:])]
+
+
+def wrap_by_width(draw: ImageDraw.ImageDraw, text: str, face: ImageFont.FreeTypeFont,
+                  max_width: int) -> list[str]:
+    lines: list[str] = []
+    current = ""
+    for word in text.split():
+        candidate = f"{current} {word}".strip()
+        if current and draw.textbbox((0, 0), candidate, font=face)[2] > max_width:
+            lines.append(current)
+            current = word
+        else:
+            current = candidate
+    if current:
+        lines.append(current)
+    return lines
+
+
+def fit_wrapped_text(draw: ImageDraw.ImageDraw, text: str, max_width: int, max_height: int,
+                     max_size: int = 38, min_size: int = 12) -> tuple[ImageFont.FreeTypeFont, list[str], int]:
+    """Fit all text into a rectangle, reducing font size before returning."""
+    for size in range(max_size, min_size - 1, -1):
+        face = font(size, bold=True, italic=False)
+        lines = wrap_by_width(draw, text, face, max_width)
+        spacing = max(3, size // 5)
+        line_height = max(draw.textbbox((0, 0), line, font=face)[3] for line in lines)
+        if line_height * len(lines) + spacing * (len(lines) - 1) <= max_height:
+            return face, lines, line_height + spacing
+    face = font(min_size, bold=True, italic=False)
+    return face, wrap_by_width(draw, text, face, max_width), min_size + 3
 
 
 def contain(image: Image.Image, size: tuple[int, int]) -> Image.Image:
@@ -245,14 +308,21 @@ def render_card(product: Product, name: str, image_bytes: bytes, template_path: 
         draw.text((12, 22), "WDPYD", font=font(17), fill="white")
 
     labels = applicability_labels(product.applications)
-    top_text, bottom_text = split_balanced(labels)
-    for text, y in ((top_text, 39), (bottom_text, 960)):
-        if text:
-            face = fit_line(draw, text, 650 if y == 39 else 610, 35, 11)
-            area_left = 88 if y == 39 else 25
-            area_width = 640 if y == 39 else 610
+    top_labels, bottom_labels = split_balanced_items(labels)
+    for band_labels, center_y, area_left, area_width in (
+        (top_labels, 39, 88, 640),
+        (bottom_labels, 960, 25, 610),
+    ):
+        lines = band_lines(band_labels)
+        if not lines:
+            continue
+        max_font_size = 32 if len(lines) == 1 else 23
+        line_gap = 29 if len(lines) == 2 else 0
+        for index, text in enumerate(lines):
+            face = fit_line(draw, text, area_width, max_font_size, 11)
             bbox = draw.textbbox((0, 0), text, font=face)
             x = area_left + (area_width - (bbox[2] - bbox[0])) // 2
+            y = center_y + (index - (len(lines) - 1) / 2) * line_gap
             draw.text((x, y), text, font=face, fill="white", anchor="lm")
 
     # Article badge.
@@ -270,8 +340,12 @@ def render_card(product: Product, name: str, image_bytes: bytes, template_path: 
     draw.rounded_rectangle((box_left, 86, 725, 176), radius=14, fill="black")
     draw.text(((box_left + 725) // 2, 131), first, font=first_font, fill="white", anchor="mm")
     if rest:
-        rest_font = fit_line(draw, rest, 690, 38, 20, italic=False)
-        draw.text((375, 218), rest, font=rest_font, fill="#2fa143", anchor="mm")
+        rest_font, rest_lines, line_step = fit_wrapped_text(draw, rest, 690, 94, 38, 12)
+        block_height = line_step * len(rest_lines)
+        start_y = 192 + (94 - block_height) / 2 + line_step / 2
+        for index, line in enumerate(rest_lines):
+            draw.text((375, start_y + index * line_step), line, font=rest_font,
+                      fill="#2fa143", anchor="mm")
 
     part = contain(Image.open(io.BytesIO(image_bytes)), (620, 570))
     px = (750 - part.width) // 2
@@ -280,8 +354,8 @@ def render_card(product: Product, name: str, image_bytes: bytes, template_path: 
 
     # These markers belong to the foreground and must not be covered by a
     # wide source photograph.
-    draw_dot_block(draw, (47, 258))
-    draw_dot_block(draw, (683, 258))
+    draw_dot_block(draw, (47, 292))
+    draw_dot_block(draw, (683, 292))
     draw_dot_block(draw, (47, 780))
 
     # Soft shadow below the product.

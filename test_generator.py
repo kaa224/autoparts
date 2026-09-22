@@ -1,6 +1,11 @@
 import unittest
 
-from generate_card import Application, applicability_labels, normalize_article, split_balanced
+from PIL import Image, ImageDraw
+
+from generate_card import (
+    Application, applicability_labels, band_lines, fit_wrapped_text,
+    normalize_article, split_balanced,
+)
 
 
 class GeneratorRulesTest(unittest.TestCase):
@@ -25,6 +30,25 @@ class GeneratorRulesTest(unittest.TestCase):
             Application("MAZDA", "MAZDA 3 2004-2008", ("MAZDA 3 2.0L 2004-2008",)),
         )
         self.assertEqual(applicability_labels(apps), ["FORD FOCUS 2.0L 2000-2004", "MAZDA 3 2.0L 2004-2008"])
+
+    def test_six_make_model_combinations_reduce_to_makes(self):
+        apps = tuple(
+            Application(make, f"{make} MODEL{i} 2000-2004", ())
+            for make, i in (("FORD", 1), ("FORD", 2), ("MAZDA", 1), ("MAZDA", 2), ("VOLVO", 1), ("VOLVO", 2))
+        )
+        self.assertEqual(applicability_labels(apps), ["FORD", "MAZDA", "VOLVO"])
+
+    def test_long_band_uses_two_lines(self):
+        labels = ["LAND ROVER", "MERCEDES BENZ", "ALFA ROMEO", "ROLLS ROYCE"]
+        lines = band_lines(labels, character_limit=30)
+        self.assertEqual(len(lines), 2)
+        self.assertEqual(" • ".join(lines), " • ".join(labels))
+
+    def test_long_name_is_fully_wrapped(self):
+        draw = ImageDraw.Draw(Image.new("RGB", (750, 1000)))
+        text = "КОМПЛЕКТ ИЗ ПОРШНЯ ПЫЛЬНИКОВ ВТУЛОК УПЛОТНИТЕЛЬНЫХ КОЛЕЦ САЛЬНИКА И ШТУЦЕРОВ"
+        _, lines, _ = fit_wrapped_text(draw, text, 690, 94)
+        self.assertEqual(" ".join(lines), text)
 
     def test_balanced_split_keeps_all_values(self):
         top, bottom = split_balanced(["AA", "BBBB", "CCC"])
