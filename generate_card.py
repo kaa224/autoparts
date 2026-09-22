@@ -256,16 +256,13 @@ def render_card(product: Product, name: str, image_bytes: bytes, template_path: 
     # retained pixel-for-pixel from the supplied template and remains on top
     # of the bottom band, matching the reference composition.
     if template is not None and template.size == CARD_SIZE:
-        wheel_box = (660, 670, 750, 1000)
+        wheel_box = (650, 650, 750, 1000)
         wheel = template.crop(wheel_box).convert("RGB")
-        mask = Image.new("L", wheel.size, 0)
-        md = ImageDraw.Draw(mask)
-        md.polygon(
-            [(90, 0), (74, 18), (58, 52), (44, 100), (30, 155),
-             (17, 220), (5, 280), (2, 330), (90, 330)],
-            fill=255,
-        )
-        card.paste(wheel, wheel_box[:2], mask)
+        card.paste(wheel, wheel_box[:2])
+        # The reference product reaches this crop at its upper-left edge;
+        # clear that tiny unrelated remnant while keeping the tyre untouched.
+        draw = ImageDraw.Draw(card)
+        draw.rectangle((650, 650, 674, 684), fill="white")
     return card
 
 
