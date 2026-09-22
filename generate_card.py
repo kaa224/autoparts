@@ -152,6 +152,16 @@ def draw_green_band(draw: ImageDraw.ImageDraw, box: tuple[int, int, int, int]) -
         draw.line((x, y1, x + (y1 - y0), y0), fill=DARK_GREEN, width=3)
 
 
+def draw_dot_block(draw: ImageDraw.ImageDraw, origin: tuple[int, int]) -> None:
+    """Draw the 3x3 orientation motif from the reference layout."""
+    start_x, start_y = origin
+    for row in range(3):
+        for column in range(3):
+            x = start_x + column * 18
+            y = start_y + row * 22
+            draw.ellipse((x, y, x + 4, y + 7), fill="black")
+
+
 def fit_line(draw: ImageDraw.ImageDraw, text: str, max_width: int, max_size: int, min_size: int = 14,
              italic: bool = True) -> ImageFont.FreeTypeFont:
     for size in range(max_size, min_size - 1, -1):
@@ -187,6 +197,7 @@ def render_card(product: Product, name: str, image_bytes: bytes, template_path: 
     draw_green_band(draw, (0, 920, 750, 999))
 
     # Preserve the recognisable logo from the supplied reference template.
+    template = None
     if template_path and template_path.exists():
         template = Image.open(template_path).convert("RGBA")
         logo = template.crop((0, 0, 76, 78))
@@ -198,15 +209,15 @@ def render_card(product: Product, name: str, image_bytes: bytes, template_path: 
     top_text, bottom_text = split_balanced(labels)
     for text, y in ((top_text, 39), (bottom_text, 960)):
         if text:
-            face = fit_line(draw, text, 650 if y == 39 else 700, 35, 15)
+            face = fit_line(draw, text, 650 if y == 39 else 610, 35, 11)
             area_left = 88 if y == 39 else 25
-            area_width = 640 if y == 39 else 700
+            area_width = 640 if y == 39 else 610
             bbox = draw.textbbox((0, 0), text, font=face)
             x = area_left + (area_width - (bbox[2] - bbox[0])) // 2
             draw.text((x, y), text, font=face, fill="white", anchor="lm")
 
     # Article badge.
-    draw.rounded_rectangle((-8, 80, 161, 190), radius=14, fill="#f7fff0", outline="#83bd37", width=3)
+    draw.rounded_rectangle((2, 81, 162, 190), radius=14, fill="#f7fff0", outline="#83bd37", width=3)
     article_font = fit_line(draw, product.article, 135, 42, 24, italic=False)
     draw.text((76, 135), product.article, font=article_font, fill="black", anchor="mm")
 
@@ -228,12 +239,33 @@ def render_card(product: Product, name: str, image_bytes: bytes, template_path: 
     py = 285 + (540 - part.height) // 2
     card.paste(part, (px, py), part)
 
+    # These markers belong to the foreground and must not be covered by a
+    # wide source photograph.
+    draw_dot_block(draw, (47, 258))
+    draw_dot_block(draw, (683, 258))
+    draw_dot_block(draw, (47, 780))
+
     # Soft shadow below the product.
     shadow = Image.new("RGBA", (440, 55), (0, 0, 0, 0))
     sd = ImageDraw.Draw(shadow)
     sd.ellipse((35, 15, 405, 42), fill=(0, 0, 0, 140))
     shadow = shadow.filter(ImageFilter.GaussianBlur(13))
     card.paste(shadow, (155, 842), shadow)
+
+    # The wheel is a semantic category marker, not just decoration.  It is
+    # retained pixel-for-pixel from the supplied template and remains on top
+    # of the bottom band, matching the reference composition.
+    if template is not None and template.size == CARD_SIZE:
+        wheel_box = (660, 670, 750, 1000)
+        wheel = template.crop(wheel_box).convert("RGB")
+        mask = Image.new("L", wheel.size, 0)
+        md = ImageDraw.Draw(mask)
+        md.polygon(
+            [(90, 0), (74, 18), (58, 52), (44, 100), (30, 155),
+             (17, 220), (5, 280), (2, 330), (90, 330)],
+            fill=255,
+        )
+        card.paste(wheel, wheel_box[:2], mask)
     return card
 
 
