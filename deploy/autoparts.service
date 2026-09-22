@@ -9,7 +9,7 @@ Group=www-data
 WorkingDirectory=/opt/autoparts
 Environment=AUTOPARTS_DATA_DIR=/var/lib/autoparts
 Environment=AUTOPARTS_TEMPLATE=/opt/autoparts/assets/Frame 6.png
-ExecStart=/opt/autoparts/.venv/bin/gunicorn --workers 1 --threads 4 --bind 127.0.0.1:8000 app:app
+ExecStart=/opt/autoparts/.venv/bin/gunicorn --workers 1 --threads 4 --bind 127.0.0.1:8791 app:app
 Restart=always
 RestartSec=3
 

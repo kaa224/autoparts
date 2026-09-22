@@ -17,6 +17,7 @@ from typing import BinaryIO
 import xlrd
 from flask import Flask, abort, jsonify, render_template, request, send_file, send_from_directory, url_for
 from openpyxl import load_workbook
+from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.utils import secure_filename
 
 from generate_card import build_with_name, normalize_article
@@ -29,6 +30,7 @@ ALLOWED_EXTENSIONS = {".xls", ".xlsx"}
 ARTICLE_FILENAME = re.compile(r"[^0-9A-Za-zА-Яа-я._-]+")
 
 app = Flask(__name__)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 app.config["MAX_CONTENT_LENGTH"] = 15 * 1024 * 1024
 executor = ThreadPoolExecutor(max_workers=int(os.environ.get("AUTOPARTS_WORKERS", "2")))
 jobs_lock = threading.Lock()
@@ -71,6 +73,7 @@ class Job:
             "rows": [row.json(self.id) for row in self.rows],
             "folder_url": url_for("job_files", job_id=self.id),
             "download_url": url_for("download_job", job_id=self.id),
+            "status_url": url_for("job_status", job_id=self.id),
             "local_path": str(self.output_dir.resolve()),
         }
 

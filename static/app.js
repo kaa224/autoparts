@@ -7,6 +7,7 @@ const rows = document.querySelector('#rows');
 const counter = document.querySelector('#counter');
 const totalProgress = document.querySelector('#total-progress');
 const result = document.querySelector('#result');
+const createUrl = document.body.dataset.createUrl;
 
 chooseButton.addEventListener('click', () => fileInput.click());
 fileInput.addEventListener('change', () => {
@@ -26,13 +27,13 @@ async function upload(file) {
   const body = new FormData();
   body.append('file', file);
   try {
-    const response = await fetch('/api/jobs', {method: 'POST', body});
+    const response = await fetch(createUrl, {method: 'POST', body});
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error || 'Ошибка загрузки файла');
     selection.textContent = `${file.name} · ${payload.total} позиций`;
     work.hidden = false;
     render(payload);
-    poll(payload.id);
+    poll(payload.status_url);
   } catch (error) {
     selection.textContent = file.name;
     showError(error.message);
@@ -70,13 +71,13 @@ function render(job) {
   }
 }
 
-async function poll(id) {
+async function poll(statusUrl) {
   try {
-    const response = await fetch(`/api/jobs/${id}`, {cache: 'no-store'});
+    const response = await fetch(statusUrl, {cache: 'no-store'});
     if (!response.ok) throw new Error('Не удалось получить состояние задачи');
     const job = await response.json();
     render(job);
-    if (job.status !== 'done') setTimeout(() => poll(id), 900);
+    if (job.status !== 'done') setTimeout(() => poll(job.status_url), 900);
   } catch (error) {
     showError(error.message);
     chooseButton.disabled = false;
