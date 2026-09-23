@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Архивы генерации</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body><main class="shell">
+  <header><span class="eyebrow">ИСТОРИЯ</span><h1>Архивы генерации</h1>
+    <p>Пакеты сгруппированы по дате создания и хранятся на сервере.</p>
+    <a class="secondary header-link" href="{{ url_for('index') }}">Новая генерация</a>
+  </header>
+  {% for group in groups %}
+  <section class="archive-day">
+    <h2>{{ group.label }}</h2>
+    <div class="panel archive-list">
+      {% for item in group.items %}
+      <article class="archive-row">
+        <div><strong>{{ item.time }} · {{ item.job.id }}</strong>
+          <small>{% if item.job.source_filename %}{{ item.job.source_filename }} · {% endif %}{{ item.card_count }} карточек · {{ item.file_count }} файлов · {{ (item.size / 1024)|round|int }} КБ</small>
+        </div>
+        <nav>
+          <a class="secondary" href="{{ url_for('job_files', job_id=item.job.id) }}">Открыть</a>
+          <a class="primary" href="{{ url_for('download_job', job_id=item.job.id) }}">Скачать ZIP</a>
+        </nav>
+      </article>
+      {% endfor %}
+    </div>
+  </section>
+  {% else %}<section class="panel empty-state">Архивов пока нет.</section>{% endfor %}
+</main></body>
+</html>

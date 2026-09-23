@@ -7,6 +7,7 @@ header { max-width:900px; margin-bottom:34px; }
 .eyebrow,.label { color:var(--deep); font-size:12px; font-weight:800; letter-spacing:.16em; }
 h1 { margin:10px 0 14px; font-size:clamp(32px,5vw,58px); line-height:1.04; letter-spacing:-.045em; }
 header p { color:var(--muted); font-size:18px; }
+.header-link { display:inline-block; margin-top:8px; }
 .panel { border:1px solid rgba(49,95,32,.14); border-radius:22px; background:rgba(255,255,255,.94); box-shadow:0 22px 65px rgba(38,73,25,.1); }
 .upload-panel { display:flex; align-items:center; gap:20px; padding:22px; }
 button,.primary,.secondary { border:0; border-radius:12px; padding:14px 19px; text-decoration:none; font:700 15px Arial,sans-serif; cursor:pointer; }
@@ -41,5 +42,9 @@ th:last-child,td:last-child { width:170px; }
 .file-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:12px; padding:22px; }
 .file-grid a { display:flex; gap:10px; align-items:center; padding:14px; border:1px solid var(--line); border-radius:12px; color:var(--ink); text-decoration:none; font-weight:700; background:white; }
 .file-grid span { padding:4px 6px; color:white; background:var(--deep); border-radius:5px; font-size:10px; }
+.archive-day { margin-top:30px; }.archive-day h2 { margin:0 0 10px; font-size:22px; }
+.archive-list { overflow:hidden; }.archive-row { display:flex; align-items:center; justify-content:space-between; gap:24px; padding:18px 22px; border-top:1px solid var(--line); }
+.archive-row:first-child { border-top:0; }.archive-row strong,.archive-row small { display:block; }.archive-row small { margin-top:4px; color:var(--muted); }
+.archive-row nav { display:flex; gap:10px; flex-shrink:0; }.empty-state { padding:30px; color:var(--muted); }
 [hidden] { display:none!important; }
-@media (max-width:700px) { .shell{padding:38px 0}.upload-panel,.result{align-items:stretch;flex-direction:column}.error{margin:0}.result nav{display:grid}.table-wrap{max-height:55vh}th,td{padding:13px 14px}th:last-child,td:last-child{width:auto} }
+@media (max-width:700px) { .shell{padding:38px 0}.upload-panel,.result,.archive-row{align-items:stretch;flex-direction:column}.error{margin:0}.result nav,.archive-row nav{display:grid}.table-wrap{max-height:55vh}th,td{padding:13px 14px}th:last-child,td:last-child{width:auto} }

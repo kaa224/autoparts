@@ -1,7 +1,11 @@
 import io
+import json
 import os
+from pathlib import Path
+import tempfile
 import unittest
 
+import app as webapp
 from app import app, parse_table
 
 
@@ -41,6 +45,29 @@ class SpreadsheetValidationTest(unittest.TestCase):
         self.assertEqual(client.get("/").status_code, 401)
         token = __import__("base64").b64encode(b"parts-user:different-secret").decode()
         self.assertEqual(client.get("/", headers={"Authorization": f"Basic {token}"}).status_code, 200)
+
+    def test_archives_are_grouped_by_creation_date(self):
+        previous = webapp.DATA_DIR
+        try:
+            with tempfile.TemporaryDirectory() as temporary:
+                webapp.DATA_DIR = Path(temporary)
+                job_dir = webapp.DATA_DIR / "jobs" / "abcdef123456"
+                output = job_dir / "output"
+                output.mkdir(parents=True)
+                (output / "636116.jpg").write_bytes(b"jpg")
+                (output / "636116.json").write_text("{}", encoding="utf-8")
+                (job_dir / "job.json").write_text(json.dumps({
+                    "id": "abcdef123456",
+                    "created_at": "2026-09-23T10:15:00+00:00",
+                    "source_filename": "parts.xlsx",
+                    "status": "done",
+                }), encoding="utf-8")
+                groups = webapp.archive_groups()
+                self.assertEqual(groups[0]["label"], "23.09.2026")
+                self.assertEqual(groups[0]["items"][0]["file_count"], 2)
+                self.assertEqual(groups[0]["items"][0]["card_count"], 1)
+        finally:
+            webapp.DATA_DIR = previous
 
 
 if __name__ == "__main__":

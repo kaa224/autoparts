@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import base64
 import hmac
+import json
 import os
 import re
 import threading
@@ -30,6 +31,7 @@ DATA_DIR = Path(os.environ.get("AUTOPARTS_DATA_DIR", BASE_DIR / "data"))
 TEMPLATE_PATH = Path(os.environ.get("AUTOPARTS_TEMPLATE", BASE_DIR / "assets" / "Frame 6.png"))
 ALLOWED_EXTENSIONS = {".xls", ".xlsx"}
 ARTICLE_FILENAME = re.compile(r"[^0-9A-Za-zА-Яа-я._-]+")
+JOB_ID = re.compile(r"^[0-9a-f]{12}$")
 
 app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
@@ -67,6 +69,7 @@ class Job:
     output_dir: Path
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     status: str = "waiting"
+    source_filename: str = ""
 
     def json(self) -> dict:
         complete = sum(row.status in {"done", "error"} for row in self.rows)
@@ -84,6 +87,83 @@ class Job:
 
 
 jobs: dict[str, Job] = {}
+
+
+def persist_job(job: Job) -> None:
+    job_dir = job.output_dir.parent
+    job_dir.mkdir(parents=True, exist_ok=True)
+    manifest = {
+        "id": job.id,
+        "created_at": job.created_at,
+        "source_filename": job.source_filename,
+        "status": job.status,
+        "total": len(job.rows),
+        "done": sum(row.status == "done" for row in job.rows),
+        "errors": sum(row.status == "error" for row in job.rows),
+    }
+    (job_dir / "job.json").write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
+def stored_job(job_id: str) -> Job | None:
+    if not JOB_ID.fullmatch(job_id):
+        return None
+    job_dir = DATA_DIR / "jobs" / job_id
+    output_dir = job_dir / "output"
+    if not output_dir.is_dir():
+        return None
+    manifest_path = job_dir / "job.json"
+    manifest: dict = {}
+    if manifest_path.is_file():
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            manifest = {}
+    fallback = datetime.fromtimestamp(job_dir.stat().st_ctime, timezone.utc).isoformat()
+    return Job(
+        id=job_id,
+        rows=[],
+        output_dir=output_dir,
+        created_at=manifest.get("created_at", fallback),
+        status=manifest.get("status", "done"),
+        source_filename=manifest.get("source_filename", ""),
+    )
+
+
+def archive_groups() -> list[dict]:
+    root = DATA_DIR / "jobs"
+    groups: dict[str, list[dict]] = {}
+    if not root.is_dir():
+        return []
+    for job_dir in root.iterdir():
+        job = stored_job(job_dir.name)
+        if job is None:
+            continue
+        try:
+            created = datetime.fromisoformat(job.created_at)
+        except ValueError:
+            created = datetime.fromtimestamp(job_dir.stat().st_ctime, timezone.utc)
+        artifacts = sorted(
+            path for path in job.output_dir.iterdir()
+            if path.suffix.lower() in {".jpg", ".json"}
+        )
+        item = {
+            "job": job,
+            "created": created,
+            "time": created.astimezone().strftime("%H:%M"),
+            "file_count": len(artifacts),
+            "card_count": sum(path.suffix.lower() == ".jpg" for path in artifacts),
+            "size": sum(path.stat().st_size for path in artifacts),
+        }
+        groups.setdefault(created.date().isoformat(), []).append(item)
+    result = []
+    for date_key in sorted(groups, reverse=True):
+        items = sorted(groups[date_key], key=lambda item: item["created"], reverse=True)
+        date_value = datetime.fromisoformat(date_key)
+        result.append({"date": date_key, "label": date_value.strftime("%d.%m.%Y"), "items": items})
+    return result
 
 
 def unauthorized_response():
@@ -166,6 +246,7 @@ def process_job(job_id: str) -> None:
     job = jobs[job_id]
     with jobs_lock:
         job.status = "processing"
+        persist_job(job)
     for row in job.rows:
         with jobs_lock:
             row.status = "processing"
@@ -188,10 +269,11 @@ def process_job(job_id: str) -> None:
                 row.error = str(exc)
     with jobs_lock:
         job.status = "done"
+        persist_job(job)
 
 
 def get_job(job_id: str) -> Job:
-    job = jobs.get(job_id)
+    job = jobs.get(job_id) or stored_job(job_id)
     if job is None:
         abort(404)
     return job
@@ -200,6 +282,11 @@ def get_job(job_id: str) -> Job:
 @app.get("/")
 def index():
     return render_template("index.html")
+
+
+@app.get("/archives")
+def archives():
+    return render_template("archives.html", groups=archive_groups())
 
 
 @app.post("/api/jobs")
@@ -217,9 +304,15 @@ def create_job():
 
     job_id = uuid.uuid4().hex[:12]
     output_dir = DATA_DIR / "jobs" / job_id / "output"
-    job = Job(job_id, [Row(article, name) for article, name in parsed], output_dir)
+    job = Job(
+        job_id,
+        [Row(article, name) for article, name in parsed],
+        output_dir,
+        source_filename=secure_filename(upload.filename),
+    )
     with jobs_lock:
         jobs[job_id] = job
+        persist_job(job)
     executor.submit(process_job, job_id)
     return jsonify(job.json()), 202
 
@@ -250,7 +343,11 @@ def job_file(job_id: str, filename: str):
 def download_job(job_id: str):
     job = get_job(job_id)
     job.output_dir.mkdir(parents=True, exist_ok=True)
-    archive = job.output_dir.parent / f"cards-{job_id}.zip"
+    try:
+        date_prefix = datetime.fromisoformat(job.created_at).date().isoformat()
+    except ValueError:
+        date_prefix = "archive"
+    archive = job.output_dir.parent / f"cards-{date_prefix}-{job_id}.zip"
     with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as bundle:
         for artifact in sorted(job.output_dir.iterdir()):
             if artifact.suffix.lower() in {".jpg", ".json"}:
