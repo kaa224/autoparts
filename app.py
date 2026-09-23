@@ -47,6 +47,7 @@ class Row:
     status: str = "waiting"
     error: str | None = None
     filename: str | None = None
+    models_filename: str | None = None
     json_filename: str | None = None
 
     def json(self, job_id: str) -> dict[str, str | None]:
@@ -59,6 +60,8 @@ class Row:
             if self.filename else None,
             "json_url": url_for("job_file", job_id=job_id, filename=self.json_filename)
             if self.json_filename else None,
+            "models_url": url_for("job_file", job_id=job_id, filename=self.models_filename)
+            if self.models_filename else None,
         }
 
 
@@ -261,6 +264,7 @@ def process_job(job_id: str) -> None:
                 result.replace(expected)
             with jobs_lock:
                 row.filename = expected.name
+                row.models_filename = f"{file_article}_models.jpg"
                 row.json_filename = f"{file_article}.json"
                 row.status = "done"
         except Exception as exc:  # one failed article must not stop the batch

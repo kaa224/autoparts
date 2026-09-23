@@ -27,11 +27,12 @@ table { width:100%; border-collapse:collapse; }
 th { position:sticky; top:0; z-index:1; padding:13px 25px; color:var(--muted); background:#f7faf5; text-align:left; font-size:12px; text-transform:uppercase; letter-spacing:.09em; }
 td { padding:15px 25px; border-top:1px solid var(--line); }
 td.article { width:18%; font-weight:800; }
-th:last-child,td:last-child { width:170px; }
+th:last-child,td:last-child { width:300px; }
 .status { display:inline-flex; align-items:center; gap:8px; color:var(--muted); text-decoration:none; font-weight:700; }
 .status i { display:grid; place-items:center; width:21px; height:21px; border-radius:50%; font-style:normal; }
 .status.active i { border:3px solid #d7e2d1; border-top-color:var(--green); animation:spin .8s linear infinite; }
 .status.done { color:#308326; }.status.done i { color:white; background:#46a83b; }
+.status.done a { color:#276f20; }
 .status.failed { color:#ae3030; }.status.failed i { color:white; background:#bd3a3a; }
 .status.waiting i { border:2px solid #d8ded5; }
 @keyframes spin { to { transform:rotate(360deg); } }

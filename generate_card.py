@@ -21,6 +21,8 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 BASE_URL = "http://wdpyd.com"
 SEARCH_PATH = "/en/WebSite/ProductList/2.html"
+BASE_DIR = Path(__file__).resolve().parent
+MODELS_BACKGROUND = BASE_DIR / "assets" / "models-background.png"
 CARD_SIZE = (750, 1000)
 GREEN = "#75bd22"
 DARK_GREEN = "#4f9519"
@@ -433,6 +435,80 @@ def render_card(product: Product, name: str, image_bytes: bytes, template_path: 
     return card
 
 
+def model_columns(draw: ImageDraw.ImageDraw, summaries: list[str], panel_width: int,
+                  panel_height: int) -> tuple[ImageFont.FreeTypeFont, list[list[tuple[str, list[str]]]], int]:
+    """Fit every model summary into one or two readable columns."""
+    column_choices = [1, 2] if len(summaries) <= 14 else [2]
+    for columns in column_choices:
+        column_width = (panel_width - (columns - 1) * 28) // columns
+        for size in range(25, 11, -1):
+            face = font(size, bold=True, italic=False)
+            entries = [(summary, wrap_by_width(draw, summary, face, column_width - 34)) for summary in summaries]
+            split = (len(entries) + 1) // 2 if columns == 2 else len(entries)
+            grouped = [entries] if columns == 1 else [entries[:split], entries[split:]]
+            line_step = size + max(4, size // 5)
+            heights = [sum(len(lines) * line_step + 10 for _, lines in group) for group in grouped]
+            if max(heights, default=0) <= panel_height:
+                return face, grouped, line_step
+    face = font(12, bold=True, italic=False)
+    midpoint = (len(summaries) + 1) // 2
+    groups = [summaries[:midpoint], summaries[midpoint:]]
+    return face, [
+        [(summary, wrap_by_width(draw, summary, face, panel_width // 2 - 45)) for summary in group]
+        for group in groups
+    ], 15
+
+
+def render_models_card(product: Product, template_path: Path | None,
+                       background_path: Path = MODELS_BACKGROUND) -> Image.Image:
+    """Render a companion card listing all catalogue application summaries."""
+    if background_path.exists():
+        card = Image.open(background_path).convert("RGB").resize(CARD_SIZE, Image.Resampling.LANCZOS)
+    else:
+        card = Image.new("RGB", CARD_SIZE, "#f6fbf2")
+    draw = ImageDraw.Draw(card)
+    draw_green_band(draw, (0, 0, 750, 78))
+    draw_green_band(draw, (0, 920, 750, 999))
+
+    if template_path and template_path.exists():
+        template = Image.open(template_path).convert("RGBA")
+        card.paste(template.crop((0, 0, 76, 78)).convert("RGB"), (0, 0))
+    else:
+        draw.text((12, 22), "WDPYD", font=font(17), fill="white")
+
+    draw.rounded_rectangle((2, 81, 162, 190), radius=14, fill="#f7fff0", outline="#83bd37", width=3)
+    article_font = fit_line(draw, product.article, 135, 42, 24, italic=False)
+    draw.text((76, 135), product.article, font=article_font, fill="black", anchor="mm")
+
+    draw.rounded_rectangle((292, 86, 725, 176), radius=14, fill="black")
+    heading_font = fit_line(draw, "ПРИМЕНИМОСТЬ", 385, 38, 22)
+    draw.text((508, 131), "ПРИМЕНИМОСТЬ", font=heading_font, fill="white", anchor="mm")
+    draw.text((375, 220), "ПОДХОДИТ ДЛЯ МОДЕЛЕЙ", font=font(31), fill="#2fa143", anchor="mm")
+
+    overlay = Image.new("RGBA", CARD_SIZE, (0, 0, 0, 0))
+    od = ImageDraw.Draw(overlay)
+    od.rounded_rectangle((28, 256, 722, 870), radius=25, fill=(255, 255, 255, 226),
+                         outline=(117, 189, 34, 155), width=3)
+    card = Image.alpha_composite(card.convert("RGBA"), overlay).convert("RGB")
+    draw = ImageDraw.Draw(card)
+
+    summaries = unique([application.summary for application in product.applications])
+    face, columns, line_step = model_columns(draw, summaries, 638, 554)
+    column_width = 638 if len(columns) == 1 else 305
+    for column_index, entries in enumerate(columns):
+        x = 62 + column_index * 333
+        y = 286
+        for _, lines in entries:
+            draw.ellipse((x, y + 8, x + 9, y + 17), fill=GREEN)
+            for line_index, line in enumerate(lines):
+                draw.text((x + 22, y + line_index * line_step), line, font=face, fill="#172016")
+            y += len(lines) * line_step + 10
+
+    draw.text((325, 960), "ЭЛЕМЕНТЫ ХОДОВОЙ ЧАСТИ", font=font(24, italic=True),
+              fill="white", anchor="mm")
+    return card
+
+
 def build(article: str, price: Path, template: Path | None, output_dir: Path) -> Path:
     product = parse_product(article)
     name = lookup_name(price, article)
@@ -447,6 +523,8 @@ def build_with_name(article: str, name: str, template: Path | None, output_dir: 
     output_dir.mkdir(parents=True, exist_ok=True)
     destination = output_dir / f"{output_stem or article}.jpg"
     render_card(product, name, image_bytes, template).save(destination, "JPEG", quality=95, subsampling=0)
+    models_destination = output_dir / f"{output_stem or article}_models.jpg"
+    render_models_card(product, template).save(models_destination, "JPEG", quality=95, subsampling=0)
     json_destination = output_dir / f"{output_stem or article}.json"
     json_destination.write_text(
         json.dumps(product_to_dict(product, name), ensure_ascii=False, indent=2) + "\n",

@@ -4,7 +4,7 @@ from PIL import Image, ImageDraw
 
 from generate_card import (
     Application, applicability_labels, band_lines, fit_wrapped_text,
-    normalize_article, split_balanced,
+    model_columns, normalize_article, split_balanced,
 )
 
 
@@ -49,6 +49,13 @@ class GeneratorRulesTest(unittest.TestCase):
         text = "КОМПЛЕКТ ИЗ ПОРШНЯ ПЫЛЬНИКОВ ВТУЛОК УПЛОТНИТЕЛЬНЫХ КОЛЕЦ САЛЬНИКА И ШТУЦЕРОВ"
         _, lines, _ = fit_wrapped_text(draw, text, 690, 94)
         self.assertEqual(" ".join(lines), text)
+
+    def test_model_card_layout_keeps_every_summary(self):
+        draw = ImageDraw.Draw(Image.new("RGB", (750, 1000)))
+        summaries = [f"HYUNDAI i20 {year}-{year + 4}" for year in range(2000, 2020)]
+        _, columns, _ = model_columns(draw, summaries, 638, 554)
+        laid_out = [summary for column in columns for summary, _ in column]
+        self.assertEqual(laid_out, summaries)
 
     def test_balanced_split_keeps_all_values(self):
         top, bottom = split_balanced(["AA", "BBBB", "CCC"])
