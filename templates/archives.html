@@ -14,7 +14,7 @@
   <section class="archive-day">
     <h2>{{ group.label }}</h2>
     <div class="panel archive-list">
-      {% for item in group.items %}
+      {% for item in group["items"] %}
       <article class="archive-row">
         <div><strong>{{ item.time }} · {{ item.job.id }}</strong>
           <small>{% if item.job.source_filename %}{{ item.job.source_filename }} · {% endif %}{{ item.card_count }} карточек · {{ item.file_count }} файлов · {{ (item.size / 1024)|round|int }} КБ</small>

@@ -66,6 +66,9 @@ class SpreadsheetValidationTest(unittest.TestCase):
                 self.assertEqual(groups[0]["label"], "23.09.2026")
                 self.assertEqual(groups[0]["items"][0]["file_count"], 2)
                 self.assertEqual(groups[0]["items"][0]["card_count"], 1)
+                response = app.test_client().get("/archives")
+                self.assertEqual(response.status_code, 200)
+                self.assertIn("23.09.2026", response.get_data(as_text=True))
         finally:
             webapp.DATA_DIR = previous
 
